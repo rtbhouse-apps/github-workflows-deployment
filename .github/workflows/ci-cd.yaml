@@ -1,0 +1,557 @@
+name: "CI / CD"
+
+on:
+  workflow_call:
+    inputs:
+      docker-registry:
+        description: "Docker registry"
+        required: false
+        default: "europe-west4-docker.pkg.dev"
+        type: "string"
+      docker-project-id:
+        description: "Docker project id"
+        required: false
+        default: "rtbhouse-apps"
+        type: "string"
+      docker-repository-id:
+        description: "Docker repository id"
+        required: true
+        type: "string"
+      docker-image-name:
+        description: "Docker image name"
+        required: true
+        type: "string"
+      docker-registry-username:
+        description: "Username for docker registry"
+        required: false
+        default: "_json_key"
+        type: "string"
+      context-dir:
+        description: "Component context dir"
+        required: false
+        default: "."
+        type: "string"
+      component:
+        description: "Component name"
+        required: true
+        type: "string"
+      deployment-repo:
+        description: "Deployment repository"
+        required: false
+        type: "string"
+      deployment-repo-path:
+        description: "Path in deployment repo"
+        required: false
+        default: "."
+        type: "string"
+    secrets:
+      docker-registry-password:
+        description: "Password for docker registry"
+        required: true
+      gcp-sa-key:
+        description: "Google Service Account JSON Key"
+        required: true
+      github-pat:
+        description: "GitHub Personal Access Token"
+        required: true
+
+defaults:
+  run:
+    shell: "bash"
+
+jobs:
+  prepare:
+    name: "Prepare"
+    runs-on: "ubuntu-latest"
+    outputs:
+      docker-image: "${{ inputs.docker-registry }}/${{ inputs.docker-project-id }}/${{ inputs.docker-repository-id }}/${{ inputs.docker-image-name }}"
+      docker-tag: "${{ steps.set-variables.outputs.docker-tag }}"
+      dev-docker-tag: "${{ steps.set-variables.outputs.dev-docker-tag }}"
+      sha-short: "${{ steps.set-variables.outputs.sha-short }}"
+      deployment-repo: "${{ steps.set-variables.outputs.deployment-repo }}"
+
+    steps:
+      - name: "Set variables"
+        id: "set-variables"
+        uses: "actions/github-script@v5"
+        with:
+          script: |
+            const shaShort = context.sha.substring(0, 7);
+            const dockerTag = (()=> {
+              if (!/^refs\/heads\//.test(context.ref)) {
+                return "sha-" + shaShort;
+              } else {
+                return context.ref.replace(/^refs\/heads\//g, '').replace(/[^a-zA-Z0-9._-]+/g, '-') + "-sha-" + shaShort;
+              }
+            })();
+            const deploymentRepo = (() => {
+              if ("${{ inputs.deployment-repo }}") {
+                return context.repo.owner + "/${{ inputs.deployment-repo }}"
+              } else {
+                return context.repo.owner + "/" + context.repo.repo.replace(/^\w+-/, "infra-");
+              }
+            })();
+
+            core.setOutput("sha-short", shaShort);
+            core.setOutput("docker-tag", dockerTag);
+            core.setOutput("dev-docker-tag", "dev-" + dockerTag)
+            core.setOutput("deployment-repo", deploymentRepo);
+
+  prepare-deployment:
+    name: "Prepare deployment"
+    runs-on: "ubuntu-latest"
+    outputs:
+      should-deploy-to-production: "${{ steps.should-deploy-to-production.outputs.result }}"
+      should-deploy-to-staging: "${{ steps.should-deploy-to-staging.outputs.result }}"
+    needs: "prepare"
+
+    steps:
+      - name: "Checkout deployment repo"
+        uses: "actions/checkout@v2"
+        with:
+          repository: "${{ needs.prepare.outputs.deployment-repo }}"
+          token: "${{ secrets.github-pat }}"
+
+      - name: "Install yaml parser"
+        run: |
+          npm install yaml
+
+      - name: "Should deploy to production"
+        id: "should-deploy-to-production"
+        if: "${{ contains('refs/heads/master refs/heads/main', github.ref) }}"
+        uses: "actions/github-script@v5"
+        with:
+          script: |
+            const fs = require("fs");
+            const YAML = require("yaml");
+
+            const component = "${{ inputs.component }}";
+
+            const valuesFilePath = "${{ inputs.deployment-repo-path }}/production/values.yaml";
+            let panelKeyAlias = "panel";
+            const chartFile = fs.readFileSync("${{ inputs.deployment-repo-path }}/production/Chart.yaml", "utf8");
+            const chartValues = YAML.parse(chartFile);
+            for (const dependency of chartValues["dependencies"]) {
+              if (dependency["name"] == "panel" && "alias" in dependency) {
+                panelKeyAlias = dependency["alias"];
+                break;
+              }
+            }
+
+            const file = fs.readFileSync(valuesFilePath, "utf8");
+            const values = YAML.parse(file);
+            const componentValues = values[panelKeyAlias]["components"][component];
+            if (componentValues["image"]["tag"] != "${{ needs.prepare.outputs.docker-tag }}") {
+              return true;
+            } else {
+              core.warning(
+                "Production has already deployed " +
+                  component +
+                  " image with tag ${{ needs.prepare.outputs.docker-tag }}. Building and deployment will be skipped."
+              );
+            }
+            return false;
+
+      - name: "Should deploy to staging"
+        id: "should-deploy-to-staging"
+        if: "${{ !contains('refs/heads/master refs/heads/main', github.ref) }}"
+        uses: "actions/github-script@v5"
+        with:
+          script: |
+            const fs = require("fs");
+            const YAML = require("yaml");
+
+            const component = "${{ inputs.component }}";
+
+            const items = fs.readdirSync("${{ inputs.deployment-repo-path }}");
+            for (const item of items) {
+              const valuesFilePath = "${{ inputs.deployment-repo-path }}/" + item + "/values.yaml";
+              if (
+                item.startsWith("staging-") &&
+                fs.lstatSync("${{ inputs.deployment-repo-path }}/" + item).isDirectory() &&
+                fs.existsSync(valuesFilePath) &&
+                fs.lstatSync(valuesFilePath).isFile()
+              ) {
+                let panelKeyAlias = "panel";
+                const chartFile = fs.readFileSync("${{ inputs.deployment-repo-path }}/" + item + "/Chart.yaml", "utf8");
+                const chartValues = YAML.parse(chartFile);
+                for (const dependency of chartValues["dependencies"]) {
+                  if (dependency["name"] == "panel" && "alias" in dependency) {
+                    panelKeyAlias = dependency["alias"];
+                    break;
+                  }
+                }
+
+                const file = fs.readFileSync(valuesFilePath, "utf8");
+                const values = YAML.parse(file);
+                const componentValues = values[panelKeyAlias]["components"][component];
+                if (componentValues.appCodeReference === context.ref) {
+                  if (componentValues["image"]["tag"] != "${{ needs.prepare.outputs.docker-tag }}") {
+                    return true;
+                  } else {
+                    core.warning(
+                      "Env " +
+                        item +
+                        " is following reference " +
+                        context.ref +
+                        ", but it already has deployed " +
+                        component +
+                        " image with tag$ {{ needs.prepare.outputs.docker-tag }}. " +
+                        "Deployment for this env will be skipped."
+                    );
+                  }
+                }
+              }
+            }
+            return false;
+
+  build-dev-docker-image:
+    name: "Build dev docker image"
+    runs-on: "self-hosted"
+    needs: "prepare"
+
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v2"
+
+      - name: "Set dev docker image metadata"
+        id: "docker-metadata"
+        uses: "docker/metadata-action@v3"
+        with:
+          images: |
+            ${{ needs.prepare.outputs.docker-image }}
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.dev-docker-tag }}
+            type=sha,prefix=dev-sha-
+
+      - name: "Set up Docker Buildx"
+        uses: "docker/setup-buildx-action@v1"
+
+      - name: "Login to Docker Registry"
+        uses: "docker/login-action@v1"
+        with:
+          registry: "${{ inputs.docker-registry }}"
+          username: "${{ inputs.docker-registry-username }}"
+          password: "${{ secrets.docker-registry-password }}"
+
+      - name: "Add uid and gid env vars"
+        id: "set-uid-gid"
+        run: |
+          echo "::set-output name=uid::`id -u`"
+          echo "::set-output name=gid::`id -g`"
+
+      - name: "Set cache params"
+        id: "set-cache-params"
+        run: |
+          echo "::set-output name=cache-to::type=registry,ref=${{ needs.prepare.outputs.docker-image }}:buildcache,mode=max"
+        if: "${{ contains('refs/heads/master refs/heads/main', github.ref) }}"
+
+      - name: "Build Docker image"
+        uses: "docker/build-push-action@v2"
+        with:
+          context: "${{ inputs.context-dir }}"
+          build-args: |
+            UID=${{ steps.set-uid-gid.outputs.uid }}
+            GID=${{ steps.set-uid-gid.outputs.gid }}
+          target: "dev"
+          push: true
+          tags: "${{ steps.docker-metadata.outputs.tags }}"
+          labels: "${{ steps.docker-metadata.outputs.labels }}"
+          cache-from: "type=registry,ref=${{ needs.prepare.outputs.docker-image }}:buildcache"
+          cache-to: "${{ steps.set-cache-params.outputs.cache-to }}"
+
+  ci:
+    name: "Continuous integration"
+    runs-on: "self-hosted"
+    needs: ["prepare", "build-dev-docker-image"]
+    env:
+      DOCKER_TAG: "${{ needs.prepare.outputs.dev-docker-tag }}"
+
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v2"
+
+      - name: "Login to Docker Registry"
+        uses: "docker/login-action@v1"
+        with:
+          registry: "${{ inputs.docker-registry }}"
+          username: "${{ inputs.docker-registry-username }}"
+          password: "${{ secrets.docker-registry-password }}"
+
+      - name: "Authenticate to Google Cloud"
+        id: "gcp-auth"
+        uses: "google-github-actions/auth@v0.4.0"
+        with:
+          credentials_json: "${{ secrets.gcp-sa-key }}"
+          token_format: "access_token"
+          access_token_lifetime: "300s"
+
+      - name: "Pull docker image"
+        run: |
+          docker-compose pull ${{ inputs.component }}
+
+      - name: "Get CI config"
+        id: "get-config"
+        env:
+          GCP_ACCESS_TOKEN: "${{ steps.gcp-auth.outputs.access_token }}"
+        run: |
+          ${{ inputs.context-dir }}/bin/get_ci_config.sh
+
+      - name: "Lint"
+        id: "lint"
+        run: |
+          ${{ inputs.context-dir }}/bin/lint.sh
+        if: >
+          success()
+          || (failure()
+            && steps.get-config.conclusion == 'success')
+
+      - name: "Test"
+        id: "test"
+        run: |
+          ${{ inputs.context-dir }}/bin/test.sh
+        if: >
+          success()
+          || (failure()
+            && steps.get-config.conclusion == 'success')
+
+  build-prod-image:
+    name: "Build prod docker image"
+    runs-on: "self-hosted"
+    needs: ["prepare", "prepare-deployment", "ci"]
+    if: "${{ needs.prepare-deployment.outputs.should-deploy-to-production == 'true' }}"
+
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v2"
+
+      - name: "Set docker prod image metadata"
+        id: "docker-metadata"
+        uses: "docker/metadata-action@v3"
+        with:
+          images: |
+            ${{ needs.prepare.outputs.docker-image }}
+          tags: |
+            type=ref,event=branch
+            type=raw,value=${{ needs.prepare.outputs.docker-tag }}
+            type=sha
+
+      - name: "Set up Docker Buildx"
+        uses: "docker/setup-buildx-action@v1"
+
+      - name: "Login to Docker Registry"
+        uses: "docker/login-action@v1"
+        with:
+          registry: "${{ inputs.docker-registry }}"
+          username: "${{ inputs.docker-registry-username }}"
+          password: "${{ secrets.docker-registry-password }}"
+
+      - name: "Add uid and gid env vars"
+        id: "set-uid-gid"
+        run: |
+          echo "::set-output name=uid::`id -u`"
+          echo "::set-output name=gid::`id -g`"
+
+      - name: "Build Docker image"
+        uses: "docker/build-push-action@v2"
+        with:
+          context: "${{ inputs.context-dir }}"
+          build-args: |
+            UID=${{ steps.set-uid-gid.outputs.uid }}
+            GID=${{ steps.set-uid-gid.outputs.gid }}
+            VERSION=${{ needs.prepare.outputs.sha-short }}
+          target: "prod"
+          push: true
+          tags: "${{ steps.docker-metadata.outputs.tags }}"
+          labels: "${{ steps.docker-metadata.outputs.labels }}"
+          cache-from: "type=registry,ref=${{ needs.prepare.outputs.docker-image }}:buildcache"
+
+  create-deployment-pr:
+    name: "Create deployment pr"
+    runs-on: "ubuntu-latest"
+    needs: ["prepare", "build-prod-image"]
+    if: "${{ contains('refs/heads/master refs/heads/main', github.ref) }}"
+
+    steps:
+      - name: "Checkout deployment repo"
+        uses: "actions/checkout@v2"
+        with:
+          repository: "${{ needs.prepare.outputs.deployment-repo }}"
+          token: "${{ secrets.github-pat }}"
+
+      - name: "Install yaml parser"
+        run: |
+          npm install yaml
+
+      - name: "Set image tags"
+        uses: "actions/github-script@v5"
+        with:
+          script: |
+            const fs = require("fs");
+            const YAML = require("yaml");
+            const { Pair } = require("yaml/types");
+
+            const filePath = "${{ inputs.deployment-repo-path }}/production/values.yaml";
+            const file = fs.readFileSync(filePath, "utf8");
+
+            document = YAML.parseDocument(file);
+            const component = document.get("panel").get("components").get("${{ inputs.component }}");
+
+            component.get("image").set("tag", "${{ needs.prepare.outputs.docker-tag }}");
+            if (component.has("appCodeReference")) {
+              component.set("appCodeReference", context.sha);
+            } else {
+              const pos = component.items.findIndex((elem) => elem.key.value == "image");
+              component.items.splice(pos, 0, new Pair("appCodeReference", context.sha));
+            }
+
+            fs.writeFileSync(filePath, document.toString());
+
+      - name: "Commit and push changes"
+        id: commit-changes
+        run: |
+          BRANCH_NAME="deployment_production_${{ inputs.component }}_${{ needs.prepare.outputs.docker-tag }}"
+          git config user.name appsjenkins
+          git config user.email apps@rtbhouse.biz
+          git checkout -b ${BRANCH_NAME}
+          git add ${{ inputs.deployment-repo-path }}/production/values.yaml
+          git commit -m "ops(production): set ${{ inputs.component }} image tag to ${{ steps.docker-tag.outputs.result }}"
+          git push --set-upstream origin ${BRANCH_NAME}
+          echo "::set-output name=branch-name::${BRANCH_NAME}"
+
+      - name: "Create PR"
+        uses: "actions/github-script@v5"
+        with:
+          github-token: "${{ secrets.github-pat }}"
+          script: |
+            const [owner, repo] = "${{ needs.prepare.outputs.deployment-repo }}".split("/");
+            github.rest.pulls.create({
+              owner: owner,
+              repo: repo,
+              head: "${{ steps.commit-changes.outputs.branch-name }}",
+              base: "master",
+              title: "Deploy ${{ inputs.component }} version ${{ steps.docker-tag.outputs.result }} to production",
+              body: "Merge this PR to deploy ${{ inputs.component }} version ${{ steps.docker-tag.outputs.result }} to production"
+            }).then((pr) => {
+              github.rest.pulls.requestReviewers({
+                owner: owner,
+                repo: repo,
+                pull_number: pr.data.number,
+                reviewers: [context.actor]
+              });
+            });
+
+  build-staging-image:
+    name: "Build staging docker image"
+    runs-on: "self-hosted"
+    needs: ["prepare", "prepare-deployment"]
+    if: "${{ needs.prepare-deployment.outputs.should-deploy-to-staging == 'true' }}"
+
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v2"
+
+      - name: "Set docker prod image metadata"
+        id: "docker-metadata"
+        uses: "docker/metadata-action@v3"
+        with:
+          images: |
+            ${{ needs.prepare.outputs.docker-image }}
+          tags: |
+            type=ref,event=branch
+            type=raw,value=${{ needs.prepare.outputs.docker-tag }}
+            type=sha
+
+      - name: "Set up Docker Buildx"
+        uses: "docker/setup-buildx-action@v1"
+
+      - name: "Login to Docker Registry"
+        uses: "docker/login-action@v1"
+        with:
+          registry: "${{ inputs.docker-registry }}"
+          username: "${{ inputs.docker-registry-username }}"
+          password: "${{ secrets.docker-registry-password }}"
+
+      - name: "Add uid and gid env vars"
+        id: "set-uid-gid"
+        run: |
+          echo "::set-output name=uid::`id -u`"
+          echo "::set-output name=gid::`id -g`"
+
+      - name: "Build Docker image"
+        uses: "docker/build-push-action@v2"
+        with:
+          context: "${{ inputs.context-dir }}"
+          build-args: |
+            UID=${{ steps.set-uid-gid.outputs.uid }}
+            GID=${{ steps.set-uid-gid.outputs.gid }}
+            VERSION=${{ needs.prepare.outputs.sha-short }}
+          target: "prod"
+          push: true
+          tags: "${{ steps.docker-metadata.outputs.tags }}"
+          labels: "${{ steps.docker-metadata.outputs.labels }}"
+          cache-from: "type=registry,ref=${{ needs.prepare.outputs.docker-image }}:buildcache"
+
+  deploy-to-staging:
+    name: "Deploy to staging"
+    runs-on: "ubuntu-latest"
+    needs: ["prepare", "build-staging-image"]
+
+    steps:
+      - name: "Checkout deployment repo"
+        uses: "actions/checkout@v2"
+        with:
+          repository: "${{ steps.deployment-repo.outputs.result }}"
+          token: "${{ secrets.github-pat }}"
+
+      - name: "Install yaml parser"
+        run: |
+          npm install yaml
+
+      - name: "Set image tag"
+        uses: "actions/github-script@v5"
+        with:
+          script: |
+            const fs = require("fs");
+            const YAML = require("yaml");
+
+            const items = fs.readdirSync("${{ inputs.deployment-repo-path }}");
+            for (const item of items) {
+              const valuesFilePath = "${{ inputs.deployment-repo-path }}/" + item + "/values.yaml";
+              if (
+                item.startsWith("staging-") &&
+                fs.lstatSync("${{ inputs.deployment-repo-path }}/" + item).isDirectory() &&
+                fs.existsSync(valuesFilePath) &&
+                fs.lstatSync(valuesFilePath).isFile()
+              ) {
+                let panelKeyAlias = "panel";
+                const chartFile = fs.readFileSync("${{ inputs.deployment-repo-path }}/" + item + "/Chart.yaml", "utf8");
+                const chartValues = YAML.parse(chartFile);
+                for (const dependency of chartValues["dependencies"]) {
+                  if (dependency["name"] == "panel" && "alias" in dependency) {
+                    panelKeyAlias = dependency["alias"];
+                    break;
+                  }
+                }
+
+                const valuesFile = fs.readFileSync(valuesFilePath, "utf8");
+                document = YAML.parseDocument(valuesFile);
+                const component = document.get("panel").get("components").get("${{ inputs.component }}");
+                if (
+                  component.get("appCodeReference") == context.ref &&
+                  component.get("image").get("tag") != "${{ needs.prepare.outputs.docker-tag }}"
+                ) {
+                  component.get("image").set("tag", "${{ steps.docker-tag.outputs.result }}");
+                  fs.writeFileSync(valuesFilePath, document.toString());
+                }
+              }
+            }
+
+      - name: "Commit and push changes"
+        run: |
+          git config user.name appsjenkins
+          git config user.email apps@rtbhouse.biz
+          git add ${{ inputs.deployment-repo-path }}/staging-*/values.yaml
+          CHANGED_ENVS=`git diff --name-only --cached | sed -E 's/((.*\/)?staging-[[:digit:]]+)\/values.yaml$/\1/' | awk '{print "./"$1}' | sed 's/^\.\///' | paste -sd ','`
+          git commit -m "ops(${CHANGED_ENVS}): deploy ${{ inputs.component }} version ${GITHUB_SHA}"
+          git push
