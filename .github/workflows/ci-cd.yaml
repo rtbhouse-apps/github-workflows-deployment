@@ -290,12 +290,23 @@ jobs:
         run: |
           docker-compose pull ${{ inputs.component }}
 
+      - name: "Install"
+        id: "install"
+        run: |
+          if [ -f ${{ inputs.context-dir }}/bin/install.sh ]; then                     
+            ${{ inputs.context-dir }}/bin/install.sh
+          fi
+
       - name: "Get CI config"
         id: "get-config"
         env:
           GCP_ACCESS_TOKEN: "${{ steps.gcp-auth.outputs.access_token }}"
         run: |
           ${{ inputs.context-dir }}/bin/get_ci_config.sh
+        if: >
+          success()
+          || (failure()
+            && steps.install.conclusion == 'success')
 
       - name: "Lint"
         id: "lint"
