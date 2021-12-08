@@ -302,7 +302,11 @@ jobs:
         env:
           GCP_ACCESS_TOKEN: "${{ steps.gcp-auth.outputs.access_token }}"
         run: |
-          ${{ inputs.context-dir }}/bin/get_ci_config.sh
+          if [ -f ${{ inputs.context-dir }}/bin/get_ci_config.sh ]; then
+            ${{ inputs.context-dir }}/bin/get_ci_config.sh
+          elif [ -f ${{ inputs.context-dir }}/bin/get_config.sh ]; then
+            ${{ inputs.context-dir }}/bin/get_config.sh
+          fi
         if: >
           success()
           || (failure()
