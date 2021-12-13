@@ -83,6 +83,7 @@ jobs:
           script: |
             const inputsDeploymentRepo = core.getInput('deployment-repo', { required: false });
             console.log("test");
+            console.log("${{ inputs.deployment-repo }}");
             console.log(inputsDeploymentRepo);
             console.log(core.getInput('deployment-repo', { required: false }))
             console.log("test");
@@ -95,7 +96,7 @@ jobs:
               }
             })();
             const deploymentRepo = (() => {
-              if (inputsDeploymentRepo) {
+              if ("${{ inputs.deployment-repo }}") {
                 return context.repo.owner + "/" + inputsDeploymentRepo
               } else {
                 return context.repo.owner + "/" + context.repo.repo.replace(/^\w+-/, "infra-");
