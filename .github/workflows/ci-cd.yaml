@@ -72,21 +72,11 @@ jobs:
       deployment-repo: "${{ steps.set-variables.outputs.deployment-repo }}"
 
     steps:
-      - name: Test
-        run: |
-          echo ${{ inputs.deployment-repo }}
-
       - name: "Set variables"
         id: "set-variables"
         uses: "actions/github-script@v5"
         with:
           script: |
-            const inputsDeploymentRepo = core.getInput('deployment-repo', { required: false });
-            console.log("test");
-            console.log("${{ inputs.deployment-repo }}");
-            console.log(inputsDeploymentRepo);
-            console.log(core.getInput('deployment-repo', { required: false }))
-            console.log("test");
             const shaShort = context.sha.substring(0, 7);
             const dockerTag = (()=> {
               if (!/^refs\/heads\//.test(context.ref)) {
@@ -97,7 +87,7 @@ jobs:
             })();
             const deploymentRepo = (() => {
               if ("${{ inputs.deployment-repo }}") {
-                return context.repo.owner + "/" + inputsDeploymentRepo
+                return context.repo.owner + "/${{ inputs.deployment-repo }}"
               } else {
                 return context.repo.owner + "/" + context.repo.repo.replace(/^\w+-/, "infra-");
               }
