@@ -78,9 +78,9 @@ jobs:
         with:
           script: |
             const inputsDeploymentRepo = core.getInput('deployment-repo', { required: false })
-            echo "test"
-            echo inputsDeploymentRepo
-            echo "test"
+            console.log("test")
+            console.log(inputsDeploymentRepo)
+            console.log("test")
             const shaShort = context.sha.substring(0, 7);
             const dockerTag = (()=> {
               if (!/^refs\/heads\//.test(context.ref)) {
