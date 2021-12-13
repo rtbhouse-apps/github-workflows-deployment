@@ -85,8 +85,8 @@ jobs:
               }
             })();
             const deploymentRepo = (() => {
-              if ("${{ inputs.deployment-repo }}") {
-                return context.repo.owner + "/${{ inputs.deployment-repo }}"
+              if (core.getInput('deployment-repo', { required: false })) {
+                return context.repo.owner + "/" + core.getInput('deployment-repo', { required: false })
               } else {
                 return context.repo.owner + "/" + context.repo.repo.replace(/^\w+-/, "infra-");
               }
