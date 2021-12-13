@@ -76,6 +76,7 @@ jobs:
         uses: "actions/github-script@v5"
         with:
           script: |
+            const inputsDeploymentRepo = core.getInput('deployment-repo', { required: false })
             const shaShort = context.sha.substring(0, 7);
             const dockerTag = (()=> {
               if (!/^refs\/heads\//.test(context.ref)) {
@@ -85,8 +86,8 @@ jobs:
               }
             })();
             const deploymentRepo = (() => {
-              if (core.getInput('deployment-repo', { required: false })) {
-                return context.repo.owner + "/" + core.getInput('deployment-repo', { required: false })
+              if (inputsDeploymentRepo) {
+                return context.repo.owner + "/" + inputsDeploymentRepo
               } else {
                 return context.repo.owner + "/" + context.repo.repo.replace(/^\w+-/, "infra-");
               }
