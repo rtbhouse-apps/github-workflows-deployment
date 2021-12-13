@@ -72,6 +72,10 @@ jobs:
       deployment-repo: "${{ steps.set-variables.outputs.deployment-repo }}"
 
     steps:
+      - name: Test
+        run: |
+          echo ${{ inputs.deployment-repo }}
+
       - name: "Set variables"
         id: "set-variables"
         uses: "actions/github-script@v5"
