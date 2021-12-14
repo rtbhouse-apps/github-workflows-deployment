@@ -38,6 +38,7 @@ on:
       deployment-repo:
         description: "Deployment repository"
         required: false
+        default: ""
         type: "string"
       deployment-repo-path:
         description: "Path in deployment repo"
