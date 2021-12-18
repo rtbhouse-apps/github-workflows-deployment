@@ -38,12 +38,15 @@ on:
       deployment-repo:
         description: "Deployment repository"
         required: false
-        default: ""
         type: "string"
       deployment-repo-path:
         description: "Path in deployment repo"
         required: false
         default: "."
+        type: "string"
+      tests-service-account:
+        description: "GCP Service account to use for CI tests"
+        required: false
         type: "string"
     secrets:
       docker-registry-password:
@@ -65,6 +68,7 @@ jobs:
     name: "Prepare"
     runs-on: "ubuntu-latest"
     outputs:
+      ci-service-account: "github-actions@rtbhouse-apps.iam.gserviceaccount.com"
       docker-image: "${{ inputs.docker-registry }}/${{ inputs.docker-project-id }}/${{ inputs.docker-repository-id }}/${{ inputs.docker-image-name }}"
       docker-tag: "${{ steps.set-variables.outputs.docker-tag }}"
       dev-docker-tag: "${{ steps.set-variables.outputs.dev-docker-tag }}"
@@ -208,8 +212,12 @@ jobs:
 
   build-dev-docker-image:
     name: "Build dev docker image"
-    runs-on: "self-hosted"
+    runs-on: "ubuntu-latest"
     needs: "prepare"
+
+    permissions:
+      contents: "read"
+      id-token: "write"
 
     steps:
       - name: "Checkout"
@@ -227,6 +235,14 @@ jobs:
 
       - name: "Set up Docker Buildx"
         uses: "docker/setup-buildx-action@v1"
+
+      - name: "Authenticate to Google Cloud"
+        id: "gcp-auth"
+        uses: "google-github-actions/auth@v0"
+        with:
+          workload_identity_provider: "projects/716804851657/locations/global/workloadIdentityPools/github-actions-identity-pool/providers/github-identity-pool-provider"
+          service_account: "${{ needs.prepare.outputs.ci-service-account }}"
+          create_credentials_file: false
 
       - name: "Login to Docker Registry"
         uses: "docker/login-action@v1"
@@ -268,6 +284,10 @@ jobs:
     env:
       DOCKER_TAG: "${{ needs.prepare.outputs.dev-docker-tag }}"
 
+    permissions:
+      contents: "read"
+      id-token: "write"
+
     steps:
       - name: "Checkout"
         uses: "actions/checkout@v2"
@@ -283,7 +303,8 @@ jobs:
         id: "gcp-auth"
         uses: "google-github-actions/auth@v0"
         with:
-          credentials_json: "${{ secrets.gcp-sa-key }}"
+          workload_identity_provider: "projects/716804851657/locations/global/workloadIdentityPools/github-actions-identity-pool/providers/github-identity-pool-provider"
+          service_account: "${{ needs.prepare.outputs.ci-service-account }}"
           create_credentials_file: true
 
       - name: "Pull docker image"
@@ -332,7 +353,7 @@ jobs:
 
   build-prod-image:
     name: "Build prod docker image"
-    runs-on: "self-hosted"
+    runs-on: "ubuntu-latest"
     needs: ["prepare", "prepare-deployment", "ci"]
     if: "${{ needs.prepare-deployment.outputs.should-deploy-to-production == 'true' }}"
 
