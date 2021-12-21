@@ -104,6 +104,7 @@ jobs:
         uses: "actions/checkout@v2"
         with:
           repository: "${{ needs.prepare.outputs.deployment-repo }}"
+          ref: "master"
           token: "${{ secrets.github-pat }}"
 
       - name: "Install yaml parser"
@@ -348,7 +349,7 @@ jobs:
         if: >
           success()
           || (failure()
-            && steps.gcp-auth-test-sa.conclusion == 'success')
+            && contains('success skipped', steps.gcp-auth-test-sa.conclusion))
 
   build-prod-image:
     name: "Build prod docker image"
@@ -425,6 +426,7 @@ jobs:
         uses: "actions/checkout@v2"
         with:
           repository: "${{ needs.prepare.outputs.deployment-repo }}"
+          ref: "master"
           token: "${{ secrets.github-pat }}"
 
       - name: "Install yaml parser"
@@ -549,7 +551,8 @@ jobs:
       - name: "Checkout deployment repo"
         uses: "actions/checkout@v2"
         with:
-          repository: "${{ steps.deployment-repo.outputs.result }}"
+          repository: "${{ needs.prepare.outputs.deployment-repo }}"
+          ref: "master"
           token: "${{ secrets.github-pat }}"
 
       - name: "Install yaml parser"
