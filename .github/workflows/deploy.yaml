@@ -205,5 +205,5 @@ jobs:
           git config user.name appsjenkins
           git config user.email apps@rtbhouse.biz
           git add ${{ inputs.deployment-repo-path }}/${{ inputs.deployment-env }}/values.yaml
-          git commit --allow-empty -m "ops(${{ inputs.deployment-env }}): deploy ${{ inputs.component }} version ${GITHUB_SHA}"
+          git commit --allow-empty -m "ops(${{ inputs.deployment-env }}): deploy ${{ inputs.component }} version ${{ needs.prepare.outputs.docker-tag }}"
           git push
