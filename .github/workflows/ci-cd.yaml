@@ -70,12 +70,15 @@ jobs:
         uses: "actions/github-script@v5"
         with:
           script: |
+            const devTagPrefix = "dev-";
             const shaShort = context.sha.substring(0, 7);
             const dockerTag = (()=> {
               if (!/^refs\/heads\//.test(context.ref)) {
                 return "sha-" + shaShort;
               } else {
-                return context.ref.replace(/^refs\/heads\//g, '').replace(/[^a-zA-Z0-9._-]+/g, '-') + "-sha-" + shaShort;
+                const sanitizedBranch = context.ref.replace(/^refs\/heads\//g, '').replace(/[^a-zA-Z0-9._-]+/g, '-');
+                const shaSuffix = "-sha-" + shaShort;
+                return sanitizedBranch.substring(0, 128 - shaSuffix.length - devTagPrefix.length) + shaSuffix;
               }
             })();
             const deploymentRepo = (() => {
@@ -88,7 +91,7 @@ jobs:
 
             core.setOutput("sha-short", shaShort);
             core.setOutput("docker-tag", dockerTag);
-            core.setOutput("dev-docker-tag", "dev-" + dockerTag)
+            core.setOutput("dev-docker-tag", devTagPrefix + dockerTag)
             core.setOutput("deployment-repo", deploymentRepo);
 
   prepare-deployment:
