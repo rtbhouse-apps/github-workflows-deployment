@@ -189,12 +189,18 @@ jobs:
 
             component.get("image").set("tag", "${{ needs.prepare.outputs.docker-tag }}");
 
-            const appCodeReference = ("${{ inputs.deployment-env }}" == "production") ? context.sha : context.ref;
-            if (component.has("appCodeReference")) {
-              component.set("appCodeReference", appCodeReference);
+            if (component.has("appCodeCommit")) {
+              component.set("appCodeCommit", context.sha);
             } else {
               const pos = component.items.findIndex((elem) => elem.key.value == "image");
-              component.items.splice(pos, 0, new Pair("appCodeReference", appCodeReference));
+              component.items.splice(pos, 0, new Pair("appCodeCommit", context.sha));
+            }
+            
+            if (component.has("appCodeRef")) {
+              component.set("appCodeRef", context.ref);
+            } else {
+              const pos = component.items.findIndex((elem) => elem.key.value == "image");
+              component.items.splice(pos, 0, new Pair("appCodeRef", context.ref));
             }
 
             fs.writeFileSync(filePath, document.toString());

@@ -183,7 +183,7 @@ jobs:
                 const file = fs.readFileSync(valuesFilePath, "utf8");
                 const values = YAML.parse(file);
                 const componentValues = values[panelKeyAlias]["components"][component];
-                if (componentValues.appCodeReference === context.ref) {
+                if (componentValues.appCodeRef === context.ref) {
                   if (componentValues["image"]["tag"] != "${{ needs.prepare.outputs.docker-tag }}") {
                     return true;
                   } else {
@@ -296,6 +296,7 @@ jobs:
           create_credentials_file: true
 
       - name: "Login to Docker Registry"
+        id: "docker-login"
         uses: "docker/login-action@v1"
         with:
           registry: "${{ inputs.docker-registry }}"
@@ -451,11 +452,18 @@ jobs:
             const component = document.get("panel").get("components").get("${{ inputs.component }}");
 
             component.get("image").set("tag", "${{ needs.prepare.outputs.docker-tag }}");
-            if (component.has("appCodeReference")) {
-              component.set("appCodeReference", context.sha);
+            if (component.has("appCodeCommit")) {
+              component.set("appCodeCommit", context.sha);
             } else {
               const pos = component.items.findIndex((elem) => elem.key.value == "image");
-              component.items.splice(pos, 0, new Pair("appCodeReference", context.sha));
+              component.items.splice(pos, 0, new Pair("appCodeCommit", context.sha));
+            }
+            
+            if (component.has("appCodeRef")) {
+              component.set("appCodeRef", context.ref);
+            } else {
+              const pos = component.items.findIndex((elem) => elem.key.value == "image");
+              component.items.splice(pos, 0, new Pair("appCodeRef", context.ref));
             }
 
             fs.writeFileSync(filePath, document.toString());
@@ -600,12 +608,14 @@ jobs:
           npm install yaml
 
       - name: "Set image tag"
+        id: set-image-tag
         uses: "actions/github-script@v5"
         with:
           script: |
             const fs = require("fs");
             const YAML = require("yaml");
 
+            let changedEnvs = [];
             const items = fs.readdirSync("${{ inputs.deployment-repo-path }}");
             for (const item of items) {
               const valuesFilePath = "${{ inputs.deployment-repo-path }}/" + item + "/values.yaml";
@@ -628,18 +638,26 @@ jobs:
                 const valuesFile = fs.readFileSync(valuesFilePath, "utf8");
                 document = YAML.parseDocument(valuesFile);
                 const component = document.get("panel").get("components").get("${{ inputs.component }}");
-                if (
-                  component.get("appCodeReference") == context.ref &&
-                  component.get("image").get("tag") != "${{ needs.prepare.outputs.docker-tag }}"
-                ) {
-                  component.get("image").set("tag", "${{ steps.docker-tag.outputs.result }}");
+
+                if (component.get("appCodeRef") == context.ref ) {
+                  if (component.has("appCodeCommit")) {
+                    component.set("appCodeCommit", context.sha);
+                  } else {
+                    const pos = component.items.findIndex((elem) => elem.key.value == "image");
+                    component.items.splice(pos, 0, new Pair("appCodeCommit", context.sha));
+                  }
+
+                  component.get("image").set("tag", "${{ needs.prepare.outputs.docker-tag }}");
                   fs.writeFileSync(valuesFilePath, document.toString());
+                  changedEnvs.push(item);
                 }
               }
             }
+            return changedEnvs;
 
       - name: "Commit and push changes"
         run: |
+          echo "${{ steps.set-image-tag.outputs.result }}"
           git config user.name appsjenkins
           git config user.email apps@rtbhouse.biz
           git add ${{ inputs.deployment-repo-path }}/staging-*/values.yaml
