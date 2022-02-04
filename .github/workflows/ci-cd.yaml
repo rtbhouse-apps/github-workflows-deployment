@@ -354,6 +354,12 @@ jobs:
           success()
           || (failure()
             && contains('success skipped', steps.gcp-auth-test-sa.conclusion))
+      
+      - name: "Cleanup"
+        id: "cleanup"
+        run: |
+          docker compose down
+        if: always()
 
   build-prod-image:
     name: "Build prod docker image"
