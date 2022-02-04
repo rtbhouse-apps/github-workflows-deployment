@@ -39,6 +39,10 @@ on:
         required: false
         default: "."
         type: "string"
+      deployment-component:
+        description: "Deployment component name"
+        required: true
+        type: "string"
       test-service-account:
         description: "GCP Service account to use for CI tests"
         required: false
@@ -123,7 +127,7 @@ jobs:
             const fs = require("fs");
             const YAML = require("yaml");
 
-            const component = "${{ inputs.component }}";
+            const component = "${{ inputs.deployment-component }}";
 
             const valuesFilePath = "${{ inputs.deployment-repo-path }}/production/values.yaml";
             let panelKeyAlias = "panel";
@@ -159,7 +163,7 @@ jobs:
             const fs = require("fs");
             const YAML = require("yaml");
 
-            const component = "${{ inputs.component }}";
+            const component = "${{ inputs.deployment-component }}";
 
             const items = fs.readdirSync("${{ inputs.deployment-repo-path }}");
             for (const item of items) {
@@ -358,7 +362,7 @@ jobs:
       - name: "Cleanup"
         id: "cleanup"
         run: |
-          docker compose down
+          docker compose down --remove-orphans
         if: always()
 
   build-prod-image:
@@ -455,7 +459,7 @@ jobs:
             const file = fs.readFileSync(filePath, "utf8");
 
             document = YAML.parseDocument(file);
-            const component = document.get("panel").get("components").get("${{ inputs.component }}");
+            const component = document.get("panel").get("components").get("${{ inputs.deployment-component }}");
 
             component.get("image").set("tag", "${{ needs.prepare.outputs.docker-tag }}");
             if (component.has("appCodeCommit")) {
@@ -477,12 +481,12 @@ jobs:
       - name: "Commit and push changes"
         id: commit-changes
         run: |
-          BRANCH_NAME="deployment_production_${{ inputs.component }}_${{ needs.prepare.outputs.docker-tag }}"
+          BRANCH_NAME="deployment_production_${{ inputs.deployment-component }}_${{ needs.prepare.outputs.docker-tag }}"
           git config user.name appsjenkins
           git config user.email apps@rtbhouse.biz
           git checkout -b ${BRANCH_NAME}
           git add ${{ inputs.deployment-repo-path }}/production/values.yaml
-          git commit -m "ops(production): deploy ${{ inputs.component }} version ${{ needs.prepare.outputs.docker-tag }}"
+          git commit -m "ops(production): deploy ${{ inputs.deployment-component }} version ${{ needs.prepare.outputs.docker-tag }}"
           git push --set-upstream origin ${BRANCH_NAME}
           echo "::set-output name=branch-name::${BRANCH_NAME}"
 
@@ -506,7 +510,7 @@ jobs:
             });
             const prLinks = prs.data.map((item) => `[#${item.number}](${item.html_url})`);
 
-            let body = "🚀 Merge this PR to deploy **${{ inputs.component }}** version"
+            let body = "🚀 Merge this PR to deploy **${{ inputs.deployment-component }}** version"
                + " **${{ needs.prepare.outputs.docker-tag }}** to production\n"
                + `🏷 Last commit SHA: ${context.sha}\n`
                + `💬 Last commit message: *${commit.data.commit.message}*`
@@ -527,7 +531,7 @@ jobs:
               repo: repo,
               head: "${{ steps.commit-changes.outputs.branch-name }}",
               base: "master",
-              title: "Deploy ${{ inputs.component }} version ${{ needs.prepare.outputs.docker-tag }} to production",
+              title: "Deploy ${{ inputs.deployment-component }} version ${{ needs.prepare.outputs.docker-tag }} to production",
               body: `${{steps.pr-body.outputs.result}}`
             }).then((pr) => {
               github.rest.pulls.requestReviewers({
@@ -656,7 +660,7 @@ jobs:
 
                 const valuesFile = fs.readFileSync(valuesFilePath, "utf8");
                 document = YAML.parseDocument(valuesFile);
-                const component = document.get("panel").get("components").get("${{ inputs.component }}");
+                const component = document.get("panel").get("components").get("${{ inputs.deployment-component }}");
 
                 if (component.get("appCodeRef") == context.ref ) {
                   if (component.has("appCodeCommit")) {
@@ -681,5 +685,5 @@ jobs:
           git config user.email apps@rtbhouse.biz
           git add ${{ inputs.deployment-repo-path }}/staging-*/values.yaml
           CHANGED_ENVS=`git diff --name-only --cached | sed -E 's/((.*\/)?staging-[[:digit:]]+)\/values.yaml$/\1/' | awk '{print "./"$1}' | sed 's/^\.\///' | paste -sd ','`
-          git commit -m "ops(${CHANGED_ENVS}): deploy ${{ inputs.component }} version ${GITHUB_SHA}"
+          git commit -m "ops(${CHANGED_ENVS}): deploy ${{ inputs.deployment-component }} version ${GITHUB_SHA}"
           git push
