@@ -21,6 +21,10 @@ on:
         description: "Docker image name"
         required: true
         type: "string"
+      docker-extra-build-arguments:
+        description: "Extra arguments passed to docker build"
+        required: false
+        type: "string"
       docker-registry-username:
         description: "Username for docker registry"
         required: false
@@ -155,6 +159,7 @@ jobs:
             UID=${{ steps.set-uid-gid.outputs.uid }}
             GID=${{ steps.set-uid-gid.outputs.gid }}
             VERSION=${{ needs.prepare.outputs.sha-short }}
+            ${{ inputs.docker-extra-build-arguments }}
           target: "prod"
           push: true
           tags: "${{ steps.docker-metadata.outputs.tags }}"
