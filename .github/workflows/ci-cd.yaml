@@ -513,7 +513,7 @@ jobs:
             let body = "🚀 Merge this PR to deploy **${{ inputs.deployment-component }}** version"
                + " **${{ needs.prepare.outputs.docker-tag }}** to production\n"
                + `🏷 Last commit SHA: ${context.sha}\n`
-               + `💬 Last commit message: *${commit.data.commit.message}*`
+               + `💬 Last commit message: *${commit.data.commit.message.replace(/`/g,'\\`')}*`
             if (prLinks)
               body += `\n🔗 Associated PRs: ${prLinks.join(", ")}`;
 
