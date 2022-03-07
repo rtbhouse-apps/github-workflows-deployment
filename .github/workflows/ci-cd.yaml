@@ -551,7 +551,7 @@ jobs:
 
   build-staging-image:
     name: "Build staging docker image"
-    runs-on: "self-hosted"
+    runs-on: "ubuntu-latest"
     needs: ["prepare", "prepare-deployment"]
     if: "${{ needs.prepare-deployment.outputs.should-deploy-to-staging == 'true' }}"
 
