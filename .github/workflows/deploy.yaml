@@ -79,7 +79,7 @@ jobs:
     steps:
       - name: "Set variables"
         id: "set-variables"
-        uses: "actions/github-script@v5"
+        uses: "actions/github-script@v6"
         with:
           script: |
             const shaShort = context.sha.substring(0, 7);
@@ -183,7 +183,7 @@ jobs:
           npm install yaml
 
       - name: "Set image tags"
-        uses: "actions/github-script@v5"
+        uses: "actions/github-script@v6"
         with:
           script: |
             const fs = require("fs");

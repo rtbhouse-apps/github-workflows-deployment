@@ -80,7 +80,7 @@ jobs:
     steps:
       - name: "Set variables"
         id: "set-variables"
-        uses: "actions/github-script@v5"
+        uses: "actions/github-script@v6"
         with:
           script: |
             const devTagPrefix = "dev-";
@@ -130,7 +130,7 @@ jobs:
       - name: "Should deploy to production"
         id: "should-deploy-to-production"
         if: "${{ contains('refs/heads/master refs/heads/main', github.ref) }}"
-        uses: "actions/github-script@v5"
+        uses: "actions/github-script@v6"
         with:
           script: |
             const fs = require("fs");
@@ -166,7 +166,7 @@ jobs:
       - name: "Should deploy to staging"
         id: "should-deploy-to-staging"
         if: "${{ !contains('refs/heads/master refs/heads/main', github.ref) }}"
-        uses: "actions/github-script@v5"
+        uses: "actions/github-script@v6"
         with:
           script: |
             const fs = require("fs");
@@ -457,7 +457,7 @@ jobs:
           npm install yaml
 
       - name: "Set image tags"
-        uses: "actions/github-script@v5"
+        uses: "actions/github-script@v6"
         with:
           script: |
             const fs = require("fs");
@@ -501,7 +501,7 @@ jobs:
 
       - name: "Create PR body"
         id: "pr-body"
-        uses: "actions/github-script@v5"
+        uses: "actions/github-script@v6"
         with:
           github-token: "${{ secrets.github-pat }}"
           result-encoding: string
@@ -530,7 +530,7 @@ jobs:
 
 
       - name: "Create PR"
-        uses: "actions/github-script@v5"
+        uses: "actions/github-script@v6"
         with:
           github-token: "${{ secrets.github-pat }}"
           script: |
@@ -641,7 +641,7 @@ jobs:
 
       - name: "Set image tag"
         id: set-image-tag
-        uses: "actions/github-script@v5"
+        uses: "actions/github-script@v6"
         with:
           script: |
             const fs = require("fs");
