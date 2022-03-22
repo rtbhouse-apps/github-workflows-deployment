@@ -125,7 +125,7 @@ jobs:
 
       - name: "Install yaml parser"
         run: |
-          npm install yaml
+          npm install yaml@1.10.2
 
       - name: "Should deploy to production"
         id: "should-deploy-to-production"
@@ -454,7 +454,7 @@ jobs:
 
       - name: "Install yaml parser"
         run: |
-          npm install yaml
+          npm install yaml@1.10.2
 
       - name: "Set image tags"
         uses: "actions/github-script@v6"
@@ -637,7 +637,7 @@ jobs:
 
       - name: "Install yaml parser"
         run: |
-          npm install yaml
+          npm install yaml@1.10.2
 
       - name: "Set image tag"
         id: set-image-tag

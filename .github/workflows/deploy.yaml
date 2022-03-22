@@ -180,7 +180,7 @@ jobs:
 
       - name: "Install yaml parser"
         run: |
-          npm install yaml
+          npm install yaml@1.10.2
 
       - name: "Set image tags"
         uses: "actions/github-script@v6"
