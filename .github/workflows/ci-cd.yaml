@@ -754,5 +754,6 @@ jobs:
           SENTRY_PROJECT: "${{ inputs.sentry-project }}"
         with:
           version: "${{ needs.prepare.outputs.sha-short }}"
+          ignore_empty: true
           ignore_missing: true
           sourcemaps: "${{ steps.copy-source-maps.outputs.source-maps-dir }}"
