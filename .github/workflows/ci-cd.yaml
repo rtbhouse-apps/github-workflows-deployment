@@ -523,7 +523,7 @@ jobs:
                + " **${{ needs.prepare.outputs.docker-tag }}** to production\n"
                + `🏷 Last commit SHA: ${context.sha}\n`
                + `💬 Last commit message: *${commit.data.commit.message.replace(/`/g,'\\`')}*`
-            if (prLinks)
+            if (prLinks.length > 0)
               body += `\n🔗 Associated PRs: ${prLinks.join(", ")}`;
 
             return body;
