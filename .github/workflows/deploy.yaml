@@ -56,6 +56,15 @@ on:
         description: "Deploy to environment"
         required: true
         type: "string"
+      sentry-project:
+        description: "Sentry project name"
+        required: false
+        type: "string"
+      sentry-send-source-maps:
+        description: "Send source maps with sentry release"
+        required: false
+        default: false
+        type: "boolean"
     secrets:
       github-pat:
         description: "GitHub Personal Access Token"
@@ -222,3 +231,59 @@ jobs:
           git add ${{ inputs.deployment-repo-path }}/${{ inputs.deployment-env }}/values.yaml
           git commit --allow-empty -m "ops(${{ inputs.deployment-env }}): deploy ${{ inputs.deployment-component }} version ${{ needs.prepare.outputs.docker-tag }}"
           git push
+    
+  create-sentry-release:
+    name: "Create Sentry release"
+    runs-on: "ubuntu-latest"
+    needs: ["prepare", "build-image"]
+    if: inputs.sentry-project
+    
+    permissions:
+      contents: "read"
+      id-token: "write"
+
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v2"
+
+      - name: "Authenticate to Google Cloud"
+        id: "gcp-auth"
+        uses: "google-github-actions/auth@v0"
+        with:
+          token_format: "access_token"
+          workload_identity_provider: "projects/716804851657/locations/global/workloadIdentityPools/github-actions-identity-pool/providers/github-identity-pool-provider"
+          service_account: "${{ needs.prepare.outputs.actions-service-account }}"
+
+      - name: "Login to Docker Registry"
+        uses: "docker/login-action@v1"
+        with:
+          registry: "${{ inputs.docker-registry }}"
+          username: "oauth2accesstoken"
+          password: "${{ steps.gcp-auth.outputs.access_token }}"
+      
+      - name: Get secrets
+        id: secrets
+        uses: google-github-actions/get-secretmanager-secrets@v0
+        with:
+          secrets: |-
+            SENTRY_RELEASE_TOKEN:projects/rtbhouse-apps/secrets/SENTRY_RELEASE_TOKEN
+      
+      - name: Copy source maps
+        id: copy-source-maps
+        run: |
+          id=$(docker create ${{ needs.prepare.outputs.docker-image }}:${{ needs.prepare.outputs.docker-tag }})
+          docker cp ${id}:/code code
+          docker rm -v ${id}
+          echo "::set-output name=source-maps-dir::code"
+        if: inputs.sentry-send-source-maps
+      
+      - name: Create Sentry release
+        uses: getsentry/action-release@v1
+        env:
+          SENTRY_AUTH_TOKEN: "${{ steps.secrets.outputs.SENTRY_RELEASE_TOKEN }}"
+          SENTRY_ORG: "rtbhouse-apps"
+          SENTRY_PROJECT: "${{ inputs.sentry-project }}"
+        with:
+          version: "${{ needs.prepare.outputs.sha-short }}"
+          ignore_missing: true
+          sourcemaps: "${{ steps.copy-source-maps.outputs.source-maps-dir }}"
