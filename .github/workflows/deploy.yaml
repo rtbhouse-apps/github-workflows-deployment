@@ -65,6 +65,11 @@ on:
         required: false
         default: false
         type: "boolean"
+      sentry-source-maps-prefix:
+        description: "Prefix for source maps url"
+        required: false
+        default: ""
+        type: "string"
     secrets:
       github-pat:
         description: "GitHub Personal Access Token"
@@ -288,3 +293,4 @@ jobs:
           ignore_empty: true
           ignore_missing: true
           sourcemaps: "${{ steps.copy-source-maps.outputs.source-maps-dir }}"
+          url_prefix: "${{ inputs.sentry-source-maps-prefix }}"
