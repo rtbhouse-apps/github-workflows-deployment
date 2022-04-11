@@ -144,12 +144,16 @@ jobs:
             const component = "${{ inputs.deployment-component }}";
 
             const valuesFilePath = "${{ inputs.deployment-repo-path }}/production/values.yaml";
-            let panelKeyAlias = "panel";
             const chartFile = fs.readFileSync("${{ inputs.deployment-repo-path }}/production/Chart.yaml", "utf8");
             const chartValues = YAML.parse(chartFile);
+            let panelKeyAlias = "";
             for (const dependency of chartValues["dependencies"]) {
-              if (dependency["name"] == "panel" && "alias" in dependency) {
-                panelKeyAlias = dependency["alias"];
+              if (["panel", "app"].includes(dependency["name"])) {
+                if ("alias" in dependency) {
+                  panelKeyAlias = dependency["alias"];
+                } else {
+                  panelKeyAlias = dependency["name"];
+                }
                 break;
               }
             }
@@ -188,12 +192,16 @@ jobs:
                 fs.existsSync(valuesFilePath) &&
                 fs.lstatSync(valuesFilePath).isFile()
               ) {
-                let panelKeyAlias = "panel";
                 const chartFile = fs.readFileSync("${{ inputs.deployment-repo-path }}/" + item + "/Chart.yaml", "utf8");
                 const chartValues = YAML.parse(chartFile);
+                let panelKeyAlias = "";
                 for (const dependency of chartValues["dependencies"]) {
-                  if (dependency["name"] == "panel" && "alias" in dependency) {
-                    panelKeyAlias = dependency["alias"];
+                  if (["panel", "app"].includes(dependency["name"])) {
+                    if ("alias" in dependency) {
+                      panelKeyAlias = dependency["alias"];
+                    } else {
+                      panelKeyAlias = dependency["name"];
+                    }
                     break;
                   }
                 }
@@ -372,7 +380,7 @@ jobs:
           success()
           || (failure()
             && contains('success skipped', steps.gcp-auth-test-sa.conclusion))
-      
+
       - name: "Cleanup"
         id: "cleanup"
         run: |
@@ -473,7 +481,7 @@ jobs:
             const file = fs.readFileSync(filePath, "utf8");
 
             document = YAML.parseDocument(file);
-            const component = document.get("panel").get("components").get("${{ inputs.deployment-component }}");
+            const component = (document.get("panel") ?? document.get("app")).get("components").get("${{ inputs.deployment-component }}");
 
             component.get("image").set("tag", "${{ needs.prepare.outputs.docker-tag }}");
             if (component.has("appCodeCommit")) {
@@ -482,7 +490,7 @@ jobs:
               const pos = component.items.findIndex((elem) => elem.key.value == "image");
               component.items.splice(pos, 0, new Pair("appCodeCommit", context.sha));
             }
-            
+
             if (component.has("appCodeRef")) {
               component.set("appCodeRef", context.ref);
             } else {
@@ -533,7 +541,6 @@ jobs:
 
             return body;
 
-
       - name: "Create PR"
         uses: "actions/github-script@v6"
         with:
@@ -555,13 +562,12 @@ jobs:
                 reviewers: [context.actor]
               });
             });
-        
+
       - name: "Post-fail cleanup"
         run: |
           git push origin --delete ${{ steps.commit-changes.outputs.branch-name }}
         if: >
           failure() && steps.commit-changes.conclusion == 'success'
-
 
   build-staging-image:
     name: "Build staging docker image"
@@ -572,7 +578,7 @@ jobs:
     permissions:
       contents: "read"
       id-token: "write"
-    
+
     steps:
       - name: "Checkout"
         uses: "actions/checkout@v2"
@@ -662,19 +668,23 @@ jobs:
                 fs.existsSync(valuesFilePath) &&
                 fs.lstatSync(valuesFilePath).isFile()
               ) {
-                let panelKeyAlias = "panel";
                 const chartFile = fs.readFileSync("${{ inputs.deployment-repo-path }}/" + item + "/Chart.yaml", "utf8");
                 const chartValues = YAML.parse(chartFile);
+                let panelKeyAlias = "";
                 for (const dependency of chartValues["dependencies"]) {
-                  if (dependency["name"] == "panel" && "alias" in dependency) {
-                    panelKeyAlias = dependency["alias"];
+                  if (["panel", "app"].includes(dependency["name"])) {
+                    if ("alias" in dependency) {
+                      panelKeyAlias = dependency["alias"];
+                    } else {
+                      panelKeyAlias = dependency["name"];
+                    }
                     break;
                   }
                 }
 
                 const valuesFile = fs.readFileSync(valuesFilePath, "utf8");
                 document = YAML.parseDocument(valuesFile);
-                const component = document.get("panel").get("components").get("${{ inputs.deployment-component }}");
+                const component = (document.get("panel") ?? document.get("app")).get("components").get("${{ inputs.deployment-component }}");
 
                 if (component.get("appCodeRef") == context.ref ) {
                   if (component.has("appCodeCommit")) {
@@ -711,7 +721,7 @@ jobs:
       && inputs.sentry-project
       && needs.prepare.result == 'success' 
       && (needs.build-prod-image.result == 'success' || needs.build-staging-image.result == 'success')
-    
+
     permissions:
       contents: "read"
       id-token: "write"
@@ -734,14 +744,14 @@ jobs:
           registry: "${{ inputs.docker-registry }}"
           username: "oauth2accesstoken"
           password: "${{ steps.gcp-auth.outputs.access_token }}"
-      
+
       - name: Get secrets
         id: secrets
         uses: google-github-actions/get-secretmanager-secrets@v0
         with:
           secrets: |-
             SENTRY_RELEASE_TOKEN:projects/rtbhouse-apps/secrets/SENTRY_RELEASE_TOKEN
-      
+
       - name: Copy source maps
         id: copy-source-maps
         run: |
@@ -750,7 +760,7 @@ jobs:
           docker rm -v ${id}
           echo "::set-output name=source-maps-dir::code"
         if: inputs.sentry-send-source-maps
-      
+
       - name: Create Sentry release
         uses: getsentry/action-release@v1
         env:
