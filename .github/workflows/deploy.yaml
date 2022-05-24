@@ -228,6 +228,12 @@ jobs:
 
             fs.writeFileSync(filePath, document.toString());
 
+      - name: "Resume application"
+        uses: "rtbhouse-apps/github-workflows-deployment/actions/modify-chart-values@v0"
+        with:
+          chart-path: "${{ inputs.deployment-repo-path }}/${{ inputs.deployment-env }}"
+          set-suspended: false
+
       - name: "Commit and push changes"
         id: commit-changes
         run: |

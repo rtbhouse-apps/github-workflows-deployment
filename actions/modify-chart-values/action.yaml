@@ -1,0 +1,12 @@
+name: "Modify Chart Values"
+description: "Modify Helm Chart values.yaml file"
+inputs:
+  chart-path:
+    description: "Path to chart directory"
+    required: true
+  set-suspended:
+    description: "Whether to suspend or resume the application"
+    required: false
+runs:
+  using: "node16"
+  main: "../lib/modify-chart-values-action/index.js"

@@ -1,0 +1,11 @@
+apiVersion: v2
+dependencies:
+  - name: noapp
+    version: "^0.1.0"
+    repository: http://onet.pl/
+maintainers:
+  - email: apps@rtbhouse.com
+    name: RTBHouse Apps
+name: panel-campaigns
+type: application
+version: 0.1.0

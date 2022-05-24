@@ -1,0 +1,61 @@
+app:
+  suspended: true
+
+  env: prod
+
+  serviceAccount:
+    create: true
+
+  gcpServiceAccount:
+    create: false
+
+  workloadIdentity:
+    enabled: true
+
+  components:
+    service:
+      fullnameOverride: service-stats
+      appCodeRef: refs/heads/master
+      image:
+        repository: rtbhouse-apps/docker-apps/service-stats
+        tag: master
+      resources:
+        requests:
+          memory: 1Gi
+          cpu: 500m
+        limits:
+          memory: 2Gi
+          cpu: 1000m
+      configuration:
+        SENTRY_ENABLED: "true"
+        PROFILER_ENABLED: "true"
+        AUDIT_LOG_ENABLED: "true"
+        OAUTH_JWT_AUDIENCE: "/projects/716804851657/global/backendServices/3439942376863432762"
+      secrets:
+        - key: SERVICE_STATS_DB_OP_URL
+          name: DB_OP_URL
+          version: latest
+        - key: SERVICE_STATS_JWT_SECRET
+          name: JWT_SECRET
+          version: latest
+      livenessProbe:
+        httpGet:
+          path: /api/healthcheck
+      readinessProbe:
+        httpGet:
+          path: /api/healthcheck
+
+  dnsRecords:
+    - name: test1.stats.rtbhouse.biz.
+      type: "A"
+      value: 35.241.49.205
+      externalDnsZone: stats-rtbhouse-biz
+
+  nginxIngress:
+    enabled: true
+    rules:
+      - hostname: test1.stats.rtbhouse.biz
+        paths:
+          - serviceName: service
+            path: /
+            pathType: Prefix
