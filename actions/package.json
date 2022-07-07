@@ -24,7 +24,7 @@
     "@vercel/ncc": "^0.33.4",
     "ava": "^4.2.0",
     "concurrently": "^7.2.1",
-    "eslint": "^8.16.0",
+    "eslint": "8.19.0",
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-prettier": "^4.0.0",
     "ts-node": "^10.8.0",
