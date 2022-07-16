@@ -11,7 +11,7 @@
     "lint-fix": "eslint --fix 'src'"
   },
   "dependencies": {
-    "@actions/core": "^1.8.2",
+    "@actions/core": "1.9.0",
     "del": "^6.1.0",
     "yaml": "2.1.1"
   },
