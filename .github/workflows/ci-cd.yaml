@@ -284,7 +284,7 @@ jobs:
         if: "${{ contains('refs/heads/master refs/heads/main', github.ref) }}"
 
       - name: "Build Docker image"
-        uses: "docker/build-push-action@v2"
+        uses: "docker/build-push-action@v3"
         with:
           context: "${{ inputs.context-dir }}"
           build-args: |
@@ -438,7 +438,7 @@ jobs:
           echo "::set-output name=gid::`id -g`"
 
       - name: "Build Docker image"
-        uses: "docker/build-push-action@v2"
+        uses: "docker/build-push-action@v3"
         with:
           context: "${{ inputs.context-dir }}"
           build-args: |
@@ -620,7 +620,7 @@ jobs:
           echo "::set-output name=gid::`id -g`"
 
       - name: "Build Docker image"
-        uses: "docker/build-push-action@v2"
+        uses: "docker/build-push-action@v3"
         with:
           context: "${{ inputs.context-dir }}"
           build-args: |
