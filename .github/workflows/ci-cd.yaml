@@ -253,7 +253,7 @@ jobs:
             type=sha,prefix=dev-sha-
 
       - name: "Set up Docker Buildx"
-        uses: "docker/setup-buildx-action@v1"
+        uses: "docker/setup-buildx-action@v2"
 
       - name: "Authenticate to Google Cloud"
         id: "gcp-auth"
@@ -413,7 +413,7 @@ jobs:
             type=sha
 
       - name: "Set up Docker Buildx"
-        uses: "docker/setup-buildx-action@v1"
+        uses: "docker/setup-buildx-action@v2"
 
       - name: "Authenticate to Google Cloud"
         id: "gcp-auth"
@@ -595,7 +595,7 @@ jobs:
             type=sha
 
       - name: "Set up Docker Buildx"
-        uses: "docker/setup-buildx-action@v1"
+        uses: "docker/setup-buildx-action@v2"
 
       - name: "Authenticate to Google Cloud"
         id: "gcp-auth"
