@@ -131,7 +131,7 @@ jobs:
 
       - name: "Set docker prod image metadata"
         id: "docker-metadata"
-        uses: "docker/metadata-action@v3"
+        uses: "docker/metadata-action@v4"
         with:
           images: |
             ${{ needs.prepare.outputs.docker-image }}
